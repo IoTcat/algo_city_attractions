@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>FindBestPath</title>
+	<script type="text/javascript">block_aplayer=true;</script>
+	<script src="https://cdn.yimian.xyz/ushio-js/ushio-head.min.js"></script>
+</head>
+<body>
+
+<p>sights_num</p><textarea id="sights_num">Math.floor(Math.random() * 50/*1000*/)+1</textarea><br>
+<p>beauty_value</p><textarea id="beauty_value">Math.floor(Math.random() * 100/*(Math.pow(10, 8)+1)*/)</textarea><br>
+<p>roads_num</p><textarea id="roads_num">Math.floor(Math.random() * 50/*2000*/)+50/*1*/</textarea><br>
+<p>road_time</p><textarea id="road_time">Math.floor(Math.random() * 10/*91*/)+10</textarea><br>
+
+<button onclick="gData();">Generate Data</button><br>
+
+<hr>
+
+	<p>max_t</p><textarea id="max_t">50</textarea><br>
+	<p>beauty</p><textarea id="beauty">[5, 10, 15, 20]</textarea><br>
+	<p>u</p><textarea id="u">[0, 1, 0]</textarea><br>
+	<p>v</p><textarea id="v">[1, 2, 3]</textarea><br>
+	<p>t</p><textarea id="t">[10, 10, 10]</textarea><br>
+	<button onclick="showGraph();">Run</button><br>
+	<p>Max_Beauty: <span id="max_beauty"></span></p><br>
+	<p>Max_Beauty_Time: <span id="max_beauty_time"></span></p><br>
+	<p>Best_Path: <span id="best_path"></span></p><br>
+	<p>Recur_Times: <span id="monitor"></span></p><br>
+
+
+	<div id="g">
+		<svg id="graphDiv"></svg>
+	</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@9.1.7/dist/mermaid.min.js"></script>
+<script src="https://cdn.yimian.xyz/ushio-js/ushio-footer.min.js"></script>
+<script type="text/javascript">
+function findBestPath(n, m, max_t, beauty, u, v, t){
+
+    // const
+    const HOTEL = 0;
+
+    // monitor
+    // a counter to record recure levels and times of the core operator function
+    let recurTimes = new (class {
+    	#current = 0;
+    	peak = 0;
+    	total = 0;
+    	plus(){
+    		this.#current ++;
+    		if(this.#current > this.peak) this.peak++;
+    		this.total++;
+    	}
+    	minus(){
+    		this.#current --;
+    	}
+    })
+
+    // global var for recording max beauty
+    let max_beauty = 0;
+    let max_beauty_time = 0;
+    let max_beauty_path = null;
+
+
+    //core operator
+    // this function determines how to do at each sight
+    let core_operator = function(sight_id, total_time, total_beauty, path_array){
+        
+        // monitor recur counter plus 1
+    	recurTimes.plus();
+    	// when total_time > max_t, drop
+        if (total_time > max_t) return recurTimes.minus();
+        // when the same direction of a path had already been used, drop
+        if (path_array.join('').indexOf(''+path_array[path_array.length-1]+sight_id) !== -1) return recurTimes.minus();
+
+        // if first time to this sight, beauty++
+        if (path_array.indexOf(sight_id) === -1){
+            total_beauty += beauty[sight_id];
+        }
+        // record the sight id into path_array
+        path_array.push(sight_id);
+
+        //when current sight is HOTEL
+        if (sight_id === HOTEL){
+        	// when current total_beauty > previous total_beauty, overwrite
+            if (total_beauty > max_beauty || (total_beauty === max_beauty && total_time < max_beauty_time)){
+                max_beauty = total_beauty;
+                max_beauty_time = total_time;
+                max_beauty_path = path_array;
+                console.log(total_beauty, path_array);
+            }
+        }
+
+
+        // find all the possible next direction
+        let path_id_array = [];
+        let dest_id_array = [];
+        [u, v].forEach((a)=>{a.forEach((item, index)=>{
+            if(item === sight_id){
+                path_id_array.push(index);
+                if(a===u)dest_id_array.push(v[index]);
+                if(a===v)dest_id_array.push(u[index]);
+            }
+        })});
+
+        // Go to all the next possible sights one by one
+        path_id_array.forEach((path_id, index)=>{
+            core_operator(dest_id_array[index], total_time + t[path_id], total_beauty, [...path_array]);
+        });
+
+    }
+
+
+    // start from HOTEL
+    core_operator(0, 0, 0, []);
+
+
+    return [max_beauty, max_beauty_time, max_beauty_path, recurTimes];
+}
+</script>
+<script type="text/javascript">
+mermaid.mermaidAPI.initialize({ startOnLoad:false }); 
+
+</script>
+<script type="text/javascript">
+
+
+	function showGraph(){
+		max_t = eval($('#max_t').val());
+		beauty = eval($('#beauty').val());
+		u = eval($('#u').val());
+		v = eval($('#v').val());
+		t = eval($('#t').val());
+
+
+		let cntt = new Date().valueOf();
+		let res = findBestPath(beauty.length, u.length, max_t, beauty, u, v, t);
+
+
+		tips.show({message: 'Computing finished in '+(new Date().valueOf() - cntt)/1000+'s! Begin painting...'});
+
+
+		$('#max_beauty').text(res[0]);
+		$('#max_beauty_time').text(res[1]);
+		$('#best_path').text(res[2].join('-->'));
+		$('#monitor').text(JSON.stringify(res[3]));
+
+		setTimeout(()=>{
+
+
+			gB = index => {
+				let o = `${index}|${beauty[index]}`;
+				if(res[2].indexOf(index) !== -1) return o+'★'; 
+				return o;
+			};
+
+			s = 'stateDiagram\n';
+			s += 'direction LR\n';
+			s += `state HOTEL {\n${gB(0)}\n}\n`;
+
+
+			for(i = 0; i < u.length; i++){
+				let isStar = false;
+				if(res[2].join('').indexOf(''+u[i]+v[i]) !== -1 || res[2].join('').indexOf(''+v[i]+u[i]) !== -1) isStar = true;
+				s += `${gB(u[i])} --> ${gB(v[i])}:${(isStar)?t[i]+'★':t[i]}\n`;
+			}
+
+
+			mermaid.mermaidAPI.render('graphDiv', s, (graph)=>$("#g").html(graph));
+			tips.show({message: 'Painting finished!'});
+
+		}, 1000);
+	}
+
+function gData(){
+	let beauty = [],
+		u = [],
+		v = [],
+		t = [];
+
+	let sights_num = eval($('#sights_num').val()),
+		beauty_value = function(){return eval($('#beauty_value').val())},
+		roads_num = eval($('#roads_num').val()),
+		road_time = function(){return eval($('#road_time').val())};
+
+	for(i = 0; i < sights_num; i ++){
+		beauty.push(beauty_value());
+	}
+
+
+	let beauty_id = [...beauty.keys()];
+	let beauty_times = Array.from({length: beauty.length}).fill(0);
+	let carr_cache = [];
+
+	for(i=0;i<roads_num;i++){
+		let arr = beauty_id.filter((v,i)=>beauty_times[i]<4);
+		if(arr.length < 2) break;
+		arr = arr.sort(function(){return 0.5-Math.random();}).slice(0,2);
+
+		let f = (arr, item)=>{
+			let ta = arr.map((i, ind)=>{
+				if(i===item) return ind;
+				return false;
+			});
+			return ta.filter(i=>i!==false);
+		}
+		let cf = (a0, a1, i0, i1)=>{
+			let arr = [...f(a0, i0), ...f(a1, i1)];
+			return arr.some(i=>{
+				return f(arr, i).length > 1;
+			});
+		}
+
+		if(!(cf(u, v, arr[0], arr[1]) || cf(u, v, arr[1], arr[0]))){
+
+			u.push(arr[0]);
+			v.push(arr[1]);
+			t.push(road_time());
+			beauty_times[arr[0]]++;
+			beauty_times[arr[1]]++;
+		}else{
+			if((carr_cache[0]===arr[0] && carr_cache[1]===arr[1]) || (carr_cache[0]===arr[1] && carr_cache[1]===arr[0])) break;
+			carr_cache = arr;
+			i--;
+		}
+	}
+
+
+
+
+	$('#beauty').val(JSON.stringify(beauty));
+	$('#u').val(JSON.stringify(u));
+	$('#v').val(JSON.stringify(v));
+	$('#t').val(JSON.stringify(t));
+
+
+}
+</script>
+</body>
+</html>
